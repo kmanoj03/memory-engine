@@ -1,0 +1,6 @@
+- added voyage-3.5-lite embedding integration (generateIncidentEmbedding)
+- implemented buildErrorFingerprint for normalized error signatures
+- added computeHybridRank (cosine + metadata boosts + explainability)
+- created /search handler using Atlas Vector Search + hybrid ranking
+- configured router mounting for /search endpoint
+- verified end-to-end recall flow: normalize → fingerprint → embed → rank → respond

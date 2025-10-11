@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { searchHandler } from "../handlers/searchHandler";
 const r = Router();
-r.post("/", (_req, res) => res.json({ results: [] })); // TEMP
+r.post("/", searchHandler);
 export default r;
