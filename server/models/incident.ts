@@ -1,7 +1,7 @@
 export type Env = "dev" | "staging" | "prod";
 
 export interface Incident {
-  _id?: string;
+  _id?: Object;
 
   // Identity & context
   fingerprint: string; // sha1(topFrames+message)

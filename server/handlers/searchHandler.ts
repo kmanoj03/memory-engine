@@ -26,7 +26,7 @@ export async function searchHandler(req: Request, res: Response) {
     // Build the vectorSearch stage without undefined props
     const vectorStage: any = {
       $vectorSearch: {
-        index: "default",
+        index: "vector_index",
         path: "vector",
         queryVector: qvec,
         numCandidates: Math.min(100, 50), // cap to control latency; tune as you like

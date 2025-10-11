@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { listIncidentsHandler } from "../handlers/incidentHandler";
 const r = Router();
-r.post("/", (_req, res) => res.json({ results: [] })); // TEMP
+r.get("/", listIncidentsHandler);
 export default r;
