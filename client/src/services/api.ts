@@ -1,4 +1,4 @@
-// import axios from 'axios';
+import axios from 'axios';
 import type {
   Incident,
   IncidentDetail,
@@ -8,6 +8,42 @@ import type {
   Filters,
   PatchDiff
 } from './types';
+
+// API base URL - adjust this based on your backend server
+const API_BASE_URL = 'http://localhost:3000';
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor for logging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    console.log(`API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    console.error('API Response Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
 
 // Mock data for development
 const mockIncidents: Incident[] = [
@@ -111,11 +147,117 @@ const mockPatchDiffs: Record<string, PatchDiff> = {
   }
 };
 
+// Types for backend API
+interface SearchRequest {
+  error_message: string;
+  stack_trace?: string;
+  service?: string;
+  env?: string;
+  version?: string;
+  tags?: string[];
+  topK?: number;
+}
+
+interface SearchResponse {
+  results: Array<{
+    id: string;
+    score: number;
+    whyMatched: string[];
+    error_message: string;
+    fix_summary?: string;
+    patch_diff?: string;
+    service: string;
+    env: string;
+    version: string;
+    tags?: string[];
+    resolved: boolean;
+    resolved_at?: string;
+    created_at: string;
+  }>;
+}
+
+interface IngestRequest {
+  error_message: string;
+  stack_trace?: string;
+  service?: string;
+  env?: string;
+  version?: string;
+  tags?: string[];
+}
+
+interface IngestResponse {
+  ok: boolean;
+  id?: string;
+  fingerprint: string;
+}
+
+interface ResolveRequest {
+  fix_summary?: string;
+  patch_diff?: string;
+  resolved_by?: string;
+}
+
+interface IncidentsResponse {
+  incidents: Array<{
+    id: string;
+    error_message: string;
+    service: string;
+    env: string;
+    version: string;
+    tags?: string[];
+    resolved: boolean;
+    fix_summary?: string;
+    patch_diff?: string;
+    created_at: string;
+    resolved_at?: string;
+  }>;
+}
+
 // Simulate network delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Mock API functions
-export const searchIncidents = async (query: string, filters: Filters): Promise<SearchResult[]> => {
+// Real API functions
+export const searchIncidents = async (searchData: SearchRequest): Promise<SearchResponse> => {
+  try {
+    const response = await api.post<SearchResponse>('/search', searchData);
+    return response.data;
+  } catch (error) {
+    console.error('Search API error:', error);
+    throw error;
+  }
+};
+
+export const ingestIncident = async (incidentData: IngestRequest): Promise<IngestResponse> => {
+  try {
+    const response = await api.post<IngestResponse>('/ingest', incidentData);
+    return response.data;
+  } catch (error) {
+    console.error('Ingest API error:', error);
+    throw error;
+  }
+};
+
+export const resolveIncident = async (incidentId: string, resolveData: ResolveRequest): Promise<void> => {
+  try {
+    await api.post(`/resolve/${incidentId}`, resolveData);
+  } catch (error) {
+    console.error('Resolve API error:', error);
+    throw error;
+  }
+};
+
+export const getIncidents = async (resolved: boolean = false): Promise<IncidentsResponse> => {
+  try {
+    const response = await api.get<IncidentsResponse>(`/incidents?resolved=${resolved}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get incidents API error:', error);
+    throw error;
+  }
+};
+
+// Legacy mock API functions (kept for backward compatibility)
+export const searchIncidentsMock = async (query: string, filters: Filters): Promise<SearchResult[]> => {
   await delay(800); // Simulate network delay
   
   // Simple mock search logic
@@ -126,7 +268,7 @@ export const searchIncidents = async (query: string, filters: Filters): Promise<
     if (filters.tags.length > 0 && !filters.tags.some(tag => incident.tags.includes(tag))) return false;
     return true;
   });
-
+ 
   // Mock similarity scoring based on keyword matching
   const results: SearchResult[] = filteredIncidents.map(incident => {
     const queryWords = query.toLowerCase().split(' ');

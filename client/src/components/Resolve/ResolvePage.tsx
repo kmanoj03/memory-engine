@@ -1,101 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Clock, CheckCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
+import { getIncidents, resolveIncident } from '../../services/api';
 
 const ResolvePage: React.FC = () => {
-  const [incidents, setIncidents] = useState([
-    {
-      id: 'INC-001',
-      description: 'Users reporting login failures with 500 errors',
-      service: 'user-service',
-      environment: 'production',
-      status: 'open',
-      resolved: false,
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      priority: 'high'
-    },
-    {
-      id: 'INC-002', 
-      description: 'Payment processing timeout issues',
-      service: 'payment-service',
-      environment: 'production',
-      status: 'open',
-      resolved: false,
-      createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      priority: 'medium'
-    },
-    {
-      id: 'INC-003',
-      description: 'Email notifications not being sent',
-      service: 'notification-service',
-      environment: 'staging',
-      status: 'open',
-      resolved: false,
-      createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      priority: 'low'
-    },
-    {
-      id: 'INC-004',
-      description: 'Database connection pool exhausted',
-      service: 'user-service',
-      environment: 'production',
-      status: 'resolved',
-      resolved: true,
-      createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-      priority: 'high'
-    },
-    {
-      id: 'INC-005',
-      description: 'API rate limiting causing 429 errors',
-      service: 'api-gateway',
-      environment: 'prod',
-      status: 'resolved',
-      resolved: true,
-      createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-      priority: 'medium'
-    }
-  ]);
+  const [incidents, setIncidents] = useState<any[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [resolutionForm, setResolutionForm] = useState({
     fix_summary: '',
     patch_diff: ''
   });
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showLoading } = useToast();
+
+  // Load incidents on component mount
+  useEffect(() => {
+    loadIncidents();
+  }, []);
+
+  const loadIncidents = async () => {
+    setLoading(true);
+    const loadingToast: (() => void) | undefined = showLoading('Loading incidents', 'Fetching incident data from the server...');
+    
+    try {
+      // Load both resolved and unresolved incidents
+      const [unresolvedResponse, resolvedResponse] = await Promise.all([
+        getIncidents(false), // unresolved
+        getIncidents(true)   // resolved
+      ]);
+
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+
+      // Combine and format incidents
+      const allIncidents = [
+        ...unresolvedResponse.incidents.map(incident => ({
+          id: incident.id,
+          description: incident.error_message,
+          service: incident.service,
+          environment: incident.env,
+          status: 'open',
+          resolved: false,
+          createdAt: incident.created_at,
+          priority: 'medium' // Default priority
+        })),
+        ...resolvedResponse.incidents.map(incident => ({
+          id: incident.id,
+          description: incident.error_message,
+          service: incident.service,
+          environment: incident.env,
+          status: 'resolved',
+          resolved: true,
+          createdAt: incident.created_at,
+          priority: 'medium', // Default priority
+          fix_summary: incident.fix_summary,
+          patch_diff: incident.patch_diff,
+          resolved_at: incident.resolved_at
+        }))
+      ];
+
+      setIncidents(allIncidents);
+    } catch (error) {
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+      
+      console.error('Error loading incidents:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showError('Failed to load incidents', `Please try again. ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefreshIncidents = async () => {
-    setLoading(true);
-    // TODO: Replace with actual backend API call
-    // const response = await fetch('/api/incidents');
-    // const data = await response.json();
-    
-    // Load incidents from localStorage (for demo purposes)
-    setTimeout(() => {
-      const storedIncidents = JSON.parse(localStorage.getItem('mockIncidents') || '[]');
-      
-      // Convert stored incidents to the format expected by the UI
-      const formattedIncidents = storedIncidents.map((incident: any) => ({
-        id: incident.id,
-        description: incident.error,
-        service: incident.service,
-        environment: incident.environment,
-        status: 'open',
-        resolved: false,
-        createdAt: incident.createdAt,
-        priority: 'medium' // Default priority for new incidents
-      }));
-      
-      // Merge with existing incidents (avoid duplicates)
-      setIncidents(prev => {
-        const existingIds = new Set(prev.map(inc => inc.id));
-        const newIncidents = formattedIncidents.filter((inc: any) => !existingIds.has(inc.id));
-        return [...newIncidents, ...prev];
-      });
-      
-      setLoading(false);
-      showSuccess('Incidents refreshed successfully!');
-    }, 1000);
+    await loadIncidents();
+    showSuccess('Incidents refreshed successfully!', 'Latest incident data has been loaded.');
   };
 
   const handleFormChange = (field: string, value: string) => {
@@ -112,56 +96,52 @@ const ResolvePage: React.FC = () => {
     }
 
     setLoading(true);
+    const loadingToast: (() => void) | undefined = showLoading('Resolving incident', 'Saving resolution details and updating incident status...');
     
     try {
-      // TODO: Replace with actual backend API call
-      // const response = await fetch(`/api/incidents/${selectedIncident.id}/resolve`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     fix_summary: resolutionForm.fix_summary,
-      //     patch_diff: resolutionForm.patch_diff
-      //   })
-      // });
-      // const result = await response.json();
-
-      // Mock API call for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the real resolve API
+      await resolveIncident(selectedIncident.id, {
+        fix_summary: resolutionForm.fix_summary,
+        patch_diff: resolutionForm.patch_diff,
+        resolved_by: 'current.user@company.com' // You might want to get this from auth context
+      });
       
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+      
+      // Update local state
       setIncidents(prev => prev.map(inc =>
         inc.id === selectedIncident.id ? {
           ...inc,
           status: 'resolved',
           resolved: true,
-          resolution: {
-            fix_summary: resolutionForm.fix_summary,
-            patch_diff: resolutionForm.patch_diff,
-            resolved_at: new Date().toISOString()
-          }
+          fix_summary: resolutionForm.fix_summary,
+          patch_diff: resolutionForm.patch_diff,
+          resolved_at: new Date().toISOString()
         } : inc
       ));
       
       setSelectedIncident(null);
       setResolutionForm({ fix_summary: '', patch_diff: '' });
-      setLoading(false);
-      showSuccess('Incident marked as resolved!');
+      showSuccess('Incident marked as resolved!', 'The incident has been successfully resolved and saved.');
       
     } catch (error) {
-      setLoading(false);
-      showError('Failed to resolve incident. Please try again.');
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showError('Failed to resolve incident', `Please try again. ${errorMessage}`);
       console.error('Error resolving incident:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -197,7 +177,7 @@ const ResolvePage: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center">
             <AlertTriangle className="h-8 w-8 text-red-500" />
@@ -212,35 +192,11 @@ const ResolvePage: React.FC = () => {
         
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center">
-            <Clock className="h-8 w-8 text-yellow-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">In Progress</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {incidents.filter(i => i.status === 'in-progress').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center">
             <CheckCircle className="h-8 w-8 text-green-500" />
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-500">Resolved</p>
               <p className="text-2xl font-bold text-gray-900">
                 {incidents.filter(i => i.status === 'resolved').length}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center">
-            <AlertTriangle className="h-8 w-8 text-blue-500" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">High Priority</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {incidents.filter(i => i.priority === 'high' && i.status === 'open').length}
               </p>
             </div>
           </div>
@@ -271,9 +227,6 @@ const ResolvePage: React.FC = () => {
                   Service
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -295,11 +248,6 @@ const ResolvePage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {incident.service}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(incident.priority)}`}>
-                      {incident.priority}
-                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(incident.status)}`}>

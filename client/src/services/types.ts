@@ -170,7 +170,7 @@ export interface MarkResolvedFormProps {
 
 // Toast types
 export interface ToastOptions {
-  type: 'success' | 'error' | 'info' | 'warning';
+  type: 'success' | 'error' | 'info' | 'warning' | 'loading';
   title: string;
   description?: string;
   duration?: number;
