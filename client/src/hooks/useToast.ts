@@ -22,39 +22,44 @@ export const useToast = () => {
 
     switch (type) {
       case 'success':
-        toast.success(
+        return toast.success(
           `${title}${description ? ` - ${description}` : ''}`,
           toastOptions
         );
-        break;
 
       case 'error':
-        toast.error(
+        return toast.error(
           `${title}${description ? ` - ${description}` : ''}`,
           toastOptions
         );
-        break;
 
       case 'warning':
-        toast(
+        return toast(
           `${title}${description ? ` - ${description}` : ''}`,
           {
             ...toastOptions,
             icon: '⚠️',
           }
         );
-        break;
+
+      case 'loading':
+        return toast.loading(
+          `${title}${description ? ` - ${description}` : ''}`,
+          {
+            ...toastOptions,
+            duration: Infinity, // Loading toasts don't auto-dismiss
+          }
+        );
 
       case 'info':
       default:
-        toast(
+        return toast(
           `${title}${description ? ` - ${description}` : ''}`,
           {
             ...toastOptions,
             icon: 'ℹ️',
           }
         );
-        break;
     }
   }, []);
 
@@ -74,11 +79,32 @@ export const useToast = () => {
     showToast({ type: 'warning', title, description });
   }, [showToast]);
 
+  const showLoading = useCallback((title: string, description?: string) => {
+    const toastId = toast.loading(
+      `${title}${description ? ` - ${description}` : ''}`,
+      {
+        duration: Infinity,
+        position: 'top-right' as const,
+        style: {
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '16px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+          maxWidth: '400px',
+        },
+      }
+    );
+    return () => toast.dismiss(toastId);
+  }, []);
+
   return {
     showToast,
     showSuccess,
     showError,
     showInfo,
-    showWarning
+    showWarning,
+    showLoading
   };
 };

@@ -43,10 +43,10 @@ interface SearchMatch {
 interface ResultCardProps {
   result: SearchMatch;
   onViewPatchDiff: (patchDiff: string) => void;
-  onApplyFix: (incidentId: string) => void;
+  onViewDetails?: (incident: Incident) => void;
 }
 
-const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onApplyFix }) => {
+const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onViewDetails }) => {
   const explainWhy = (whyMatched: string[]) => {
     const cosine = whyMatched.find(r => r.startsWith("cosine:"));
     const parts = whyMatched.filter(r => !r.startsWith("cosine:"))
@@ -54,11 +54,6 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onAppl
     return `Similarity ${cosine?.split(":")[1] ?? "?"}; matched on ${parts.join(", ")}`;
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 0.9) return 'bg-green-100 text-green-800';
-    if (score >= 0.8) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -88,15 +83,23 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onAppl
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h4 className="text-lg font-medium text-gray-900 mb-2">
-            [{result.incident._id || result.incident.fingerprint}] {result.incident.error_message}
-          </h4>
-          <p className="text-gray-700 mb-3">{result.incident.fix_summary || 'No fix summary available'}</p>
-        </div>
-        <div className="flex items-center space-x-2 ml-4">
-          <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${getScoreColor(result.final_score)}`}>
-            Score: {Math.round(result.final_score * 100)}%
-          </span>
+          <div className="flex items-center gap-2 mb-2">
+            <h4 className="text-lg font-medium text-gray-900">
+              [{result.incident._id || result.incident.fingerprint}] {result.incident.error_message}
+            </h4>
+            {result.incident.resolved && (
+              <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Resolved
+              </span>
+            )}
+          </div>
+          {result.incident.fix_summary && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+              <h5 className="text-sm font-medium text-green-800 mb-1">Fix Summary:</h5>
+              <p className="text-green-700 text-sm">{result.incident.fix_summary}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -171,6 +174,15 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onAppl
 
       {/* Action Buttons */}
       <div className="flex items-center space-x-3 pt-4 border-t border-gray-200">
+        {result.incident.resolved && onViewDetails && (
+          <button
+            onClick={() => onViewDetails(result.incident)}
+            className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 text-sm rounded-md hover:bg-blue-200 transition-colors"
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            View Details
+          </button>
+        )}
         {result.incident.patch_diff && (
           <button
             onClick={() => onViewPatchDiff(result.incident.patch_diff!)}
@@ -180,13 +192,6 @@ const ResultCard: React.FC<ResultCardProps> = ({ result, onViewPatchDiff, onAppl
             View Patch Diff
           </button>
         )}
-        <button
-          onClick={() => onApplyFix(result.incident._id || result.incident.fingerprint)}
-          className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm rounded-md hover:bg-primary-700 transition-colors"
-        >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Apply This Fix
-        </button>
       </div>
     </motion.div>
   );

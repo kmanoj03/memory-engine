@@ -98,21 +98,6 @@ const PatchDiffModal: React.FC<PatchDiffModalProps> = ({ patchDiff, onClose }) =
                 </div>
               </div>
 
-              {/* Legend */}
-              <div className="flex items-center space-x-6 text-sm">
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-green-100 border-l-2 border-green-500 mr-2"></div>
-                  <span className="text-green-800">Added lines</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-red-100 border-l-2 border-red-500 mr-2"></div>
-                  <span className="text-red-800">Removed lines</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-4 h-4 bg-gray-50 mr-2"></div>
-                  <span className="text-gray-700">Context lines</span>
-                </div>
-              </div>
             </div>
 
             {/* Footer */}

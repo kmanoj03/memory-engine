@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Tag, AlertCircle, Code, Clock, Server, Package, Plus } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
+import { searchIncidents, ingestIncident } from '../../services/api';
 import PatchDiffModal from './PatchDiffModal';
+import IncidentDetailModal from './IncidentDetailModal';
 import ResultCard from './ResultCard';
 
 interface SearchFormData {
@@ -68,8 +70,10 @@ const SearchPage: React.FC = () => {
   const [tagInput, setTagInput] = useState('');
   const [results, setResults] = useState<SearchMatch[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [selectedPatchDiff, setSelectedPatchDiff] = useState<string | null>(null);
-  const { showSuccess, showError } = useToast();
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const { showSuccess, showError, showLoading } = useToast();
 
 
   const serviceOptions = [
@@ -128,48 +132,56 @@ const SearchPage: React.FC = () => {
     }
 
     setLoading(true);
+    const loadingToast: (() => void) | undefined = showLoading('Saving new incident', 'Creating incident record and generating embeddings...');
     
     try {
-      // TODO: Replace with actual backend API call to /api/incidents
-      // const response = await fetch('/api/incidents', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-          //   body: JSON.stringify({
-          //     error_message: formData.error_message,
-          //     stack_trace: formData.stack_trace,
-          //     service: formData.service,
-          //     env: formData.env,
-          //     version: formData.version,
-          //     tags: formData.tags,
-      //     fix_summary: '', // Empty for new incidents
-      //     resolved: false
-      //   })
-      // });
-      // const newIncident = await response.json();
+      // Call the real ingest API
+      const incidentData = {
+        error_message: formData.error_message,
+        stack_trace: formData.stack_trace,
+        service: formData.service,
+        env: formData.env,
+        version: formData.version,
+        tags: formData.tags
+      };
 
-      // Mock API call for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await ingestIncident(incidentData);
       
-          // Create a mock incident ID
-          // const mockIncidentId = `INC-${Date.now()}`;
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
       
-      showSuccess('New incident saved successfully! You can now search for it or resolve it in the Resolve tab.');
-      
-      // Clear the form after successful save
-      setFormData({
-            error_message: '',
-            stack_trace: '',
-            service: '',
-            env: undefined,
-            version: '',
-            tags: [],
-            topK: 10,
-            limit: 10
-          });
-      setResults([]);
+      if (response.ok) {
+        showSuccess(
+          'New incident saved successfully!', 
+          `ID: ${response.id || response.fingerprint}. You can now search for it or resolve it in the Resolve tab.`
+        );
+        
+        // Clear the form after successful save
+        setFormData({
+          error_message: '',
+          stack_trace: '',
+          service: '',
+          env: undefined,
+          version: '',
+          tags: [],
+          topK: 10,
+          limit: 10
+        });
+        setResults([]);
+      } else {
+        showError('Failed to save new incident', 'Please try again.');
+      }
       
     } catch (error) {
-      showError('Failed to save new incident. Please try again.');
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showError('Failed to save new incident', `Please try again. ${errorMessage}`);
       console.error('Error saving new incident:', error);
     } finally {
       setLoading(false);
@@ -183,88 +195,73 @@ const SearchPage: React.FC = () => {
   };
 
   const handleSearch = async () => {
-        if (!formData.error_message.trim()) {
-          showError('Please enter an error message to search for similar incidents');
-          return;
-        }
+    if (!formData.error_message.trim()) {
+      showError('Please enter an error message to search for similar incidents');
+      return;
+    }
 
     setLoading(true);
+    setHasSearched(true);
+    const loadingToast: (() => void) | undefined = showLoading('Searching for similar incidents', 'This may take a few seconds...');
     
     try {
-      // TODO: Replace with actual backend API call
-      // const response = await fetch('/api/search', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-          //   body: JSON.stringify({
-          //     error_message: formData.error_message,
-          //     stack_trace: formData.stack_trace,
-          //     service: formData.service,
-          //     env: formData.env,
-          //     version: formData.version,
-          //     tags: formData.tags
-      //   })
-      // });
-      // const data = await response.json();
-      
-      // Mock search results - simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock API response in the format you provided
-      const mockApiResponse = {
-        results: [
-          {
-            id: "68eac901a4222f329b65e358",
-            score: 1.65,
-            whyMatched: ["cosine:0.96","+service","+env","+version","+tags:2"],
-            service: "payments-api",
-            env: "prod",
-            version: "v2.3.1",
-            error_message: "TypeError: Cannot read properties of undefined (reading \"amount\")",
-            resolved: true,
-            fix_summary: "Add null check before reading amount",
-            patch_diff: "diff --git a/src/routes/charges.ts ...",
-            resolved_at: "2025-10-11T21:43:59.857Z"
-          }
-        ]
+      // Call the real search API
+      const searchData = {
+        error_message: formData.error_message,
+        stack_trace: formData.stack_trace,
+        service: formData.service,
+        env: formData.env,
+        version: formData.version,
+        tags: formData.tags,
+        topK: formData.topK
       };
+
+      const response = await searchIncidents(searchData);
       
-      // Simple mock search logic - for demo purposes, only return results if error contains "TypeError"
-          const errorLower = formData.error_message.toLowerCase();
-      const hasTypeError = errorLower.includes('typeerror') || errorLower.includes('cannot read');
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
       
-      if (hasTypeError) {
+      if (response.results && response.results.length > 0) {
         // Convert API response to SearchMatch format
-        const searchMatches: SearchMatch[] = mockApiResponse.results.map(result => ({
+        const searchMatches: SearchMatch[] = response.results.map(result => ({
           incident: {
             _id: result.id,
             fingerprint: `sha1_${result.id}`,
             service: result.service,
             env: result.env as Env,
             version: result.version,
-            error_type: 'TypeError',
+            error_type: 'Error',
             error_message: result.error_message,
-            stack_trace: 'at PaymentHandler.processCharge (payments-api/src/routes/charges.ts:45:12)',
-            tags: ['payment', 'typeerror', 'undefined'],
+            stack_trace: formData.stack_trace || 'Stack trace not available',
+            tags: result.tags || [],
             fix_summary: result.fix_summary,
             patch_diff: result.patch_diff,
             resolved: result.resolved,
-            created_at: '2024-01-15T10:30:00Z',
+            created_at: result.created_at,
             resolved_at: result.resolved_at
           },
-          final_score: result.score / 2, // Normalize score to 0-1 range
+          final_score: result.score, // Use the actual score from API
           why_matched: result.whyMatched
         }));
         
         setResults(searchMatches);
-        showSuccess(`Found ${searchMatches.length} similar incidents`);
+        showSuccess(`Found ${searchMatches.length} similar incidents`, 'Check the results below for potential solutions');
       } else {
         // No results found - this will trigger the "Save as New Incident" button
         setResults([]);
-        showSuccess('No similar incidents found - you can save this as a new incident');
+        showSuccess('No similar incidents found', 'You can save this as a new incident for future reference');
       }
       
     } catch (error) {
-      showError('Search failed. Please try again.');
+      // Dismiss loading toast
+      if (loadingToast) {
+        loadingToast();
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showError('Search failed', `Please try again. ${errorMessage}`);
       console.error('Search error:', error);
     } finally {
       setLoading(false);
@@ -284,15 +281,16 @@ const SearchPage: React.FC = () => {
           });
     setResults([]);
     setTagInput('');
+    setHasSearched(false);
   };
 
   const handleViewPatchDiff = (patchDiff: string) => {
     setSelectedPatchDiff(patchDiff);
   };
 
-  const handleApplyFix = (incidentId: string) => {
-    showSuccess(`Applied fix from incident ${incidentId}`);
-    // TODO: Implement actual fix application logic
+
+  const handleViewDetails = (incident: Incident) => {
+    setSelectedIncident(incident);
   };
 
   return (
@@ -510,7 +508,7 @@ const SearchPage: React.FC = () => {
                 key={result.incident._id || result.incident.fingerprint}
                 result={result}
                 onViewPatchDiff={handleViewPatchDiff}
-                onApplyFix={handleApplyFix}
+                onViewDetails={handleViewDetails}
               />
             ))}
           </motion.div>
@@ -518,7 +516,7 @@ const SearchPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Empty State */}
-      {!loading && results.length === 0 && formData.error_message && (
+      {!loading && results.length === 0 && hasSearched && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
           <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No similar incidents found</h3>
@@ -554,6 +552,13 @@ const SearchPage: React.FC = () => {
           onClose={() => setSelectedPatchDiff(null)}
         />
       )}
+
+      {/* Incident Detail Modal */}
+      <IncidentDetailModal
+        incident={selectedIncident}
+        isOpen={!!selectedIncident}
+        onClose={() => setSelectedIncident(null)}
+      />
     </div>
   );
 };
